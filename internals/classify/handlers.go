@@ -66,7 +66,7 @@ func HandleClassify(svc *Service) http.HandlerFunc {
 
 		result, err := svc.Classify(r.Context(), name)
 		if err != nil {
-			log.Fatalf("classify: %v", err)
+			log.Printf("classify: %v", err)
 			encodeError(w, err)
 			return
 		}
