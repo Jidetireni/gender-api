@@ -57,11 +57,12 @@ func HandleClassify(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		for _, char := range name {
-			if char >= '0' && char <= '9' {
-				encodeError(w, &APIError{Status: http.StatusUnprocessableEntity, Message: "name must not contain numbers"})
-				return
-			}
+		if !nameRegex.MatchString(name) {
+			encodeError(w, &APIError{
+				Status:  http.StatusUnprocessableEntity,
+				Message: "name must only contain alphabetic characters",
+			})
+			return
 		}
 
 		result, err := svc.Classify(r.Context(), name)

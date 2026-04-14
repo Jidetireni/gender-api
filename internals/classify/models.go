@@ -1,10 +1,15 @@
 package classify
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
 
 const (
 	maxResponseSize = 1 << 20 // 1MB
 )
+
+var nameRegex = regexp.MustCompile(`^[a-zA-Z]+$`)
 
 type GenderResponse struct {
 	Name        string  `json:"name"`
