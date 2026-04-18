@@ -41,7 +41,7 @@ ARG DB_URL
 # Set environment variables for goose
 ENV GOOSE_DRIVER=postgres
 ENV GOOSE_DBSTRING=${DB_URL}
-ENV GOOSE_MIGRATION_DIR=/app/sql/migrations
+ENV GOOSE_MIGRATION_DIR=/app/internals/sql/migrations
 
 # Run migrations before starting the application
-CMD ["sh", "-c", "goose -v up && ./bin/api"]
+CMD ["sh", "-c", "goose -v up && ./server"]
