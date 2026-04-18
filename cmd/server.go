@@ -29,17 +29,17 @@ func addRoutes(
 	profileSvc *profile.Service,
 ) {
 
-	r.Route("/api", func(r chi.Router) {
+	r.Route("/api/profiles", func(r chi.Router) {
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Access-Control-Allow-Origin", "*")
 				next.ServeHTTP(w, req)
 			})
 		})
-		r.Post("/profiles", handlers.HandleCreateProfile(profileSvc))
-		r.Get("/profiles/{id}", handlers.HandleGetProfile(profileSvc))
-		r.Get("/profiles", handlers.HandleListProfiles(profileSvc))
-		r.Delete("/profiles/{id}", handlers.HandleDeleteProfile(profileSvc))
+		r.Post("/", handlers.HandleCreateProfile(profileSvc))
+		r.Get("/{id}", handlers.HandleGetProfile(profileSvc))
+		r.Get("/", handlers.HandleListProfiles(profileSvc))
+		r.Delete("/{id}", handlers.HandleDeleteProfile(profileSvc))
 	})
 
 }

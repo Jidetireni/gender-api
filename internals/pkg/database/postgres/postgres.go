@@ -1,8 +1,11 @@
 package postgres
 
 import (
+	"strings"
+
 	"github.com/Jidetireni/gender-api/config"
 	"github.com/jmoiron/sqlx"
+	"github.com/jmoiron/sqlx/reflectx"
 	_ "github.com/lib/pq"
 )
 
@@ -15,6 +18,8 @@ func New(cfg *config.Config) (*PostgresDB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	db.Mapper = reflectx.NewMapperFunc("json", strings.ToLower)
 
 	return &PostgresDB{
 		DB: db,
