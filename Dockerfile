@@ -35,8 +35,13 @@ COPY --from=builder /go/bin/goose /usr/local/bin/goose
 COPY --from=builder /app/server .
 COPY --from=builder /app/internals/sql/migrations ./internals/sql/migrations
 
-# Expose port 8000 to the outside world
-EXPOSE 8000
+# Accept DB_URL from build environment
+ARG DB_URL
 
-# Command to run the executable
-CMD ["sh", "-c", "goose -dir internals/sql/migrations postgres \"${DB_URL}\" up && ./server"]
+# Set environment variables for goose
+ENV GOOSE_DRIVER=postgres
+ENV GOOSE_DBSTRING=${DB_URL}
+ENV GOOSE_MIGRATION_DIR=/app/sql/migrations
+
+# Run migrations before starting the application
+CMD ["sh", "-c", "goose -v up && ./bin/api"]
