@@ -12,7 +12,10 @@ import (
 	"time"
 
 	"github.com/Jidetireni/gender-api/config"
-	"github.com/Jidetireni/gender-api/internals/classify"
+	"github.com/Jidetireni/gender-api/internals/pkg/cache"
+	"github.com/Jidetireni/gender-api/internals/pkg/database"
+	"github.com/Jidetireni/gender-api/internals/profile"
+	"github.com/Jidetireni/gender-api/internals/profile/repository"
 )
 
 func main() {
@@ -26,13 +29,28 @@ func main() {
 func run(ctx context.Context) error {
 	cfg := config.New()
 
-	classifySvc := classify.New(cfg)
+	db, err := database.New(cfg)
+	if err != nil {
+		return err
+	}
 
-	svc := NewServer(cfg, classifySvc)
+	cache, err := cache.New(cfg)
+	if err != nil {
+		return err
+	}
+
+	profileRepo := repository.NewProfileRepository(db.PostgresDB.DB)
+	profileSvc := profile.New(cfg, profileRepo, cache.Redis)
+
+	server := NewServer(
+		cfg,
+		profileSvc,
+		db.PostgresDB,
+	)
 
 	httpServer := &http.Server{
 		Addr:    net.JoinHostPort(cfg.Host, cfg.Port),
-		Handler: svc,
+		Handler: server,
 	}
 
 	go func() {

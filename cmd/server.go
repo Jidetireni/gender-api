@@ -4,15 +4,21 @@ import (
 	"net/http"
 
 	"github.com/Jidetireni/gender-api/config"
-	"github.com/Jidetireni/gender-api/internals/classify"
+	"github.com/Jidetireni/gender-api/internals/pkg/database/postgres"
+	"github.com/Jidetireni/gender-api/internals/profile"
+	"github.com/Jidetireni/gender-api/internals/profile/handlers"
 	"github.com/go-chi/chi/v5"
 )
 
-func NewServer(cfg *config.Config, classifySvc *classify.Service) http.Handler {
+func NewServer(
+	cfg *config.Config,
+	profileSvc *profile.Service,
+	postgresDB *postgres.PostgresDB,
+) http.Handler {
 	r := chi.NewRouter()
 	addRoutes(
 		r,
-		classifySvc,
+		profileSvc,
 	)
 
 	return r
@@ -20,7 +26,7 @@ func NewServer(cfg *config.Config, classifySvc *classify.Service) http.Handler {
 
 func addRoutes(
 	r *chi.Mux,
-	classifySvc *classify.Service,
+	profileSvc *profile.Service,
 ) {
 
 	r.Route("/api", func(r chi.Router) {
@@ -30,7 +36,10 @@ func addRoutes(
 				next.ServeHTTP(w, req)
 			})
 		})
-		r.Get("/classify", classify.HandleClassify(classifySvc))
+		r.Post("/profiles", handlers.HandleCreateProfile(profileSvc))
+		r.Get("/profiles/{id}", handlers.HandleGetProfile(profileSvc))
+		r.Get("/profiles", handlers.HandleListProfiles(profileSvc))
+		r.Delete("/profiles/{id}", handlers.HandleDeleteProfile(profileSvc))
 	})
 
 }
