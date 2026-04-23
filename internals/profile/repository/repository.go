@@ -137,7 +137,7 @@ func (p *ProfileRepository) Upsert(ctx context.Context, profile *Profile) (*Prof
 			profile.ID, profile.Name, profile.Gender, profile.GenderProbability,
 			profile.Age, profile.AgeGroup, profile.CountryID, profile.CountryName, profile.CountryProbability,
 		).
-		Suffix(`ON CONFLICT (name) DO NOTHING
+		Suffix(`ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
 			RETURNING id, name, gender, gender_probability,
 				age, age_group, country_id, country_name, country_probability,
 				created_at, (xmax = 0) AS is_insert`)
