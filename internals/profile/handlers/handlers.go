@@ -5,7 +5,6 @@ import (
 
 	"github.com/Jidetireni/gender-api/internals/profile"
 	"github.com/Jidetireni/gender-api/internals/profile/handlers/models"
-	"github.com/Jidetireni/gender-api/internals/profile/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -112,39 +111,38 @@ func HandleGetProfile(svc *profile.Service) http.HandlerFunc {
 
 func HandleListProfiles(svc *profile.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		filter := &repository.ProfileRepositoryFilter{}
+		query := r.URL.Query()
 
-		if gender := r.URL.Query().Get("gender"); gender != "" {
-			filter.Gender = &gender
-		}
-		if countryID := r.URL.Query().Get("country_id"); countryID != "" {
-			filter.CountryID = &countryID
-		}
-		if ageGroup := r.URL.Query().Get("age_group"); ageGroup != "" {
-			filter.AgeGroup = &ageGroup
+		filter, err := parseProfileFilters(query)
+		if err != nil {
+			encodeError(w, &models.APIError{
+				Status:  http.StatusUnprocessableEntity,
+				Message: "Invalid query parameters",
+			})
+			return
 		}
 
-		profiles, err := svc.List(r.Context(), filter)
+		queryOptions, err := parseQueryOptions(query)
+		if err != nil {
+			encodeError(w, &models.APIError{
+				Status:  http.StatusUnprocessableEntity,
+				Message: "Invalid query parameters",
+			})
+			return
+		}
+
+		result, err := svc.List(r.Context(), filter, queryOptions)
 		if err != nil {
 			encodeError(w, err)
 			return
 		}
 
-		shortProfiles := lo.Map(profiles, func(p *models.Profile, _ int) *models.ProfileShort {
-			return &models.ProfileShort{
-				ID:        p.ID,
-				Name:      p.Name,
-				Gender:    p.Gender,
-				Age:       p.Age,
-				AgeGroup:  p.AgeGroup,
-				CountryID: p.CountryID,
-			}
-		})
-
-		encode(w, http.StatusOK, models.APIResponse[[]*models.ProfileShort]{
+		encode(w, http.StatusOK, models.APIResponse[any]{
 			Status: "success",
-			Count:  lo.ToPtr(len(shortProfiles)),
-			Data:   shortProfiles,
+			Page:   lo.ToPtr(int(queryOptions.Page)),
+			Limit:  lo.ToPtr(int(queryOptions.Limit)),
+			Total:  lo.ToPtr(int(result.Total)),
+			Data:   result.Data,
 		})
 	}
 }
@@ -184,5 +182,52 @@ func HandleDeleteProfile(svc *profile.Service) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func HandleSearchProfiles(svc *profile.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+
+		q := query.Get("q")
+		if q == "" {
+			encodeError(w, &models.APIError{
+				Status:  http.StatusBadRequest,
+				Message: "Unable to interpret query",
+			})
+			return
+		}
+
+		filter, err := parseSearchQuery(q)
+		if err != nil {
+			encodeError(w, &models.APIError{
+				Status:  http.StatusUnprocessableEntity,
+				Message: err.Error(),
+			})
+			return
+		}
+
+		queryOptions, err := parseQueryOptions(query)
+		if err != nil {
+			encodeError(w, &models.APIError{
+				Status:  http.StatusUnprocessableEntity,
+				Message: "Invalid query parameters",
+			})
+			return
+		}
+
+		result, err := svc.List(r.Context(), filter, queryOptions)
+		if err != nil {
+			encodeError(w, err)
+			return
+		}
+
+		encode(w, http.StatusOK, models.APIResponse[any]{
+			Status: "success",
+			Page:   lo.ToPtr(int(queryOptions.Page)),
+			Limit:  lo.ToPtr(int(queryOptions.Limit)),
+			Total:  lo.ToPtr(int(result.Total)),
+			Data:   result.Data,
+		})
 	}
 }

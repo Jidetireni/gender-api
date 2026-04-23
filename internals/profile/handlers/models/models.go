@@ -25,6 +25,9 @@ type APIResponse[T any] struct {
 	Status  string  `json:"status"`
 	Message *string `json:"message,omitempty"`
 	Count   *int    `json:"count,omitempty"`
+	Page    *int    `json:"page,omitempty"`
+	Limit   *int    `json:"limit,omitempty"`
+	Total   *int    `json:"total,omitempty"`
 	Data    T       `json:"data"`
 }
 
@@ -37,10 +40,10 @@ type Profile struct {
 	Name               string    `json:"name"`
 	Gender             string    `json:"gender"`
 	GenderProbability  float64   `json:"gender_probability"`
-	SampleSize         int       `json:"sample_size"`
 	Age                int       `json:"age"`
 	AgeGroup           string    `json:"age_group"`
 	CountryID          string    `json:"country_id"`
+	CountryName        string    `json:"country_name"`
 	CountryProbability float64   `json:"country_probability"`
 	CreatedAt          time.Time `json:"created_at"`
 }
@@ -52,4 +55,9 @@ type ProfileShort struct {
 	Age       int       `json:"age"`
 	AgeGroup  string    `json:"age_group"`
 	CountryID string    `json:"country_id"`
+}
+
+type ListResult[T any] struct {
+	Total int64 `json:"total,omitempty"`
+	Data  []*T  `json:"data"`
 }

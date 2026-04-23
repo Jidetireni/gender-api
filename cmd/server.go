@@ -37,6 +37,7 @@ func addRoutes(
 			})
 		})
 		r.Post("/", handlers.HandleCreateProfile(profileSvc))
+		r.Get("/search", handlers.HandleSearchProfiles(profileSvc))
 		r.Get("/{id}", handlers.HandleGetProfile(profileSvc))
 		r.Get("/", handlers.HandleListProfiles(profileSvc))
 		r.Delete("/{id}", handlers.HandleDeleteProfile(profileSvc))

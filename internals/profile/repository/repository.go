@@ -7,6 +7,7 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/samber/lo"
 )
 
 type ProfileRepository struct {
@@ -22,40 +23,67 @@ func NewProfileRepository(db *sqlx.DB) *ProfileRepository {
 }
 
 type ProfileRepositoryFilter struct {
-	ID        *uuid.UUID
-	Gender    *string
-	CountryID *string
-	AgeGroup  *string
+	ID                    *uuid.UUID
+	Gender                *string
+	CountryID             *string
+	AgeGroup              *string
+	MinAge                *int
+	MaxAge                *int
+	MinGenderProbability  *float64
+	MinCountryProbability *float64
 }
 
-func (c *ProfileRepository) buildQuery(filter *ProfileRepositoryFilter, queryType QueryType) (string, []any, error) {
+func (c *ProfileRepository) buildQuery(filter *ProfileRepositoryFilter, queryOptions QueryOptions) (string, []any, error) {
+	queryType := lo.FromPtrOr(queryOptions.Type, QueryTypeSelect)
+
 	var builder sq.SelectBuilder
 	switch queryType {
 	case QueryTypeSelect:
 		builder = c.psql.Select("*").From("profiles")
-
 	case QueryTypeCount:
 		builder = c.psql.Select("COUNT(*)").From("profiles")
 	}
 
+	// Exact filters
 	if filter.ID != nil {
 		builder = builder.Where(sq.Eq{"id": filter.ID})
 	}
 	if filter.Gender != nil {
-		builder = builder.Where(sq.ILike{"gender": filter.Gender})
+		builder = builder.Where(sq.Eq{"gender": filter.Gender})
 	}
 	if filter.CountryID != nil {
-		builder = builder.Where(sq.ILike{"country_id": filter.CountryID})
+		builder = builder.Where(sq.Eq{"country_id": filter.CountryID})
 	}
 	if filter.AgeGroup != nil {
-		builder = builder.Where(sq.ILike{"age_group": filter.AgeGroup})
+		builder = builder.Where(sq.Eq{"age_group": filter.AgeGroup})
+	}
+
+	if filter.MinAge != nil {
+		builder = builder.Where(sq.GtOrEq{"age": filter.MinAge})
+	}
+	if filter.MaxAge != nil {
+		builder = builder.Where(sq.LtOrEq{"age": filter.MaxAge})
+	}
+	if filter.MinGenderProbability != nil {
+		builder = builder.Where(sq.GtOrEq{"gender_probability": filter.MinGenderProbability})
+	}
+	if filter.MinCountryProbability != nil {
+		builder = builder.Where(sq.GtOrEq{"country_probability": filter.MinCountryProbability})
+	}
+
+	if queryType == QueryTypeSelect {
+		var err error
+		builder, err = ApplyPagination(builder, queryOptions)
+		if err != nil {
+			return "", nil, err
+		}
 	}
 
 	return builder.ToSql()
 }
 
 func (p *ProfileRepository) Get(ctx context.Context, filter *ProfileRepositoryFilter) (*Profile, error) {
-	query, args, err := p.buildQuery(filter, QueryTypeSelect)
+	query, args, err := p.buildQuery(filter, QueryOptions{Type: lo.ToPtr(QueryTypeSelect)})
 	if err != nil {
 		return nil, err
 	}
@@ -69,8 +97,19 @@ func (p *ProfileRepository) Get(ctx context.Context, filter *ProfileRepositoryFi
 	return &profile, nil
 }
 
-func (p *ProfileRepository) List(ctx context.Context, filter *ProfileRepositoryFilter) ([]*Profile, error) {
-	query, args, err := p.buildQuery(filter, QueryTypeSelect)
+func (p *ProfileRepository) Count(ctx context.Context, filter *ProfileRepositoryFilter) (int64, error) {
+	query, args, err := p.buildQuery(filter, QueryOptions{Type: lo.ToPtr(QueryTypeCount)})
+	if err != nil {
+		return 0, err
+	}
+
+	var total int64
+	err = p.db.QueryRowContext(ctx, query, args...).Scan(&total)
+	return total, err
+}
+
+func (p *ProfileRepository) List(ctx context.Context, filter *ProfileRepositoryFilter, queryOptions QueryOptions) (*ListResult[Profile], error) {
+	query, args, err := p.buildQuery(filter, queryOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -81,25 +120,27 @@ func (p *ProfileRepository) List(ctx context.Context, filter *ProfileRepositoryF
 		return nil, err
 	}
 
-	return profiles, nil
+	return &ListResult[Profile]{
+		Items: profiles,
+		Page:  queryOptions.Page,
+		Limit: queryOptions.Limit,
+	}, nil
 }
 
 func (p *ProfileRepository) Upsert(ctx context.Context, profile *Profile) (*Profile, bool, error) {
 	builder := p.psql.Insert("profiles").
-		Columns("id", "name", "gender", "gender_probability", "sample_size", "age", "age_group", "country_id", "country_probability").
-		Values(profile.ID, profile.Name, profile.Gender, profile.GenderProbability, profile.SampleSize, profile.Age, profile.AgeGroup, profile.CountryID, profile.CountryProbability).
-		Suffix(`ON CONFLICT (name)
-                DO UPDATE SET
-                    name = EXCLUDED.name,
-                    gender = EXCLUDED.gender,
-                    gender_probability = EXCLUDED.gender_probability,
-                    sample_size = EXCLUDED.sample_size,
-                    age = EXCLUDED.age,
-                    age_group = EXCLUDED.age_group,
-                    country_id = EXCLUDED.country_id,
-                    country_probability = EXCLUDED.country_probability,
-                    updated_at = CURRENT_TIMESTAMP
-                RETURNING id, name, gender, gender_probability, sample_size, age, age_group, country_id, country_probability, created_at, updated_at, (xmax = 0) AS is_insert`)
+		Columns(
+			"id", "name", "gender", "gender_probability",
+			"age", "age_group", "country_id", "country_name", "country_probability",
+		).
+		Values(
+			profile.ID, profile.Name, profile.Gender, profile.GenderProbability,
+			profile.Age, profile.AgeGroup, profile.CountryID, profile.CountryName, profile.CountryProbability,
+		).
+		Suffix(`ON CONFLICT (name) DO NOTHING
+			RETURNING id, name, gender, gender_probability,
+				age, age_group, country_id, country_name, country_probability,
+				created_at, (xmax = 0) AS is_insert`)
 
 	query, args, err := builder.ToSql()
 	if err != nil {
@@ -114,13 +155,12 @@ func (p *ProfileRepository) Upsert(ctx context.Context, profile *Profile) (*Prof
 			&res.Name,
 			&res.Gender,
 			&res.GenderProbability,
-			&res.SampleSize,
 			&res.Age,
 			&res.AgeGroup,
 			&res.CountryID,
+			&res.CountryName,
 			&res.CountryProbability,
 			&res.CreatedAt,
-			&res.UpdatedAt,
 			&isInsert,
 		)
 	if err != nil {
@@ -146,10 +186,10 @@ func (p *ProfileRepository) MapRepositoryToHandlerModel(profile *Profile) *model
 		Name:               profile.Name,
 		Gender:             profile.Gender,
 		GenderProbability:  profile.GenderProbability,
-		SampleSize:         int(profile.SampleSize),
 		Age:                int(profile.Age),
 		AgeGroup:           profile.AgeGroup,
 		CountryID:          profile.CountryID,
+		CountryName:        profile.CountryName,
 		CountryProbability: profile.CountryProbability,
 		CreatedAt:          profile.CreatedAt,
 	}

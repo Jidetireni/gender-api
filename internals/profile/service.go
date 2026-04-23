@@ -12,6 +12,7 @@ import (
 	"github.com/Jidetireni/gender-api/internals/pkg/cache/redis"
 	"github.com/Jidetireni/gender-api/internals/profile/handlers/models"
 	"github.com/Jidetireni/gender-api/internals/profile/repository"
+	"github.com/biter777/countries"
 
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -23,7 +24,8 @@ var _ RedisService = (*redis.Redis)(nil)
 
 type ProfileRepository interface {
 	Get(ctx context.Context, filter *repository.ProfileRepositoryFilter) (*repository.Profile, error)
-	List(ctx context.Context, filter *repository.ProfileRepositoryFilter) ([]*repository.Profile, error)
+	Count(ctx context.Context, filter *repository.ProfileRepositoryFilter) (int64, error)
+	List(ctx context.Context, filter *repository.ProfileRepositoryFilter, queryOptions repository.QueryOptions) (*repository.ListResult[repository.Profile], error)
 	Upsert(ctx context.Context, profile *repository.Profile) (*repository.Profile, bool, error)
 	Delete(ctx context.Context, id *uuid.UUID) error
 	MapRepositoryToHandlerModel(profile *repository.Profile) *models.Profile
@@ -178,18 +180,17 @@ func (s *Service) Create(ctx context.Context, name string) (*models.Profile, boo
 		ageGroup = "senior"
 	}
 
-	sampleSize := genderResponse.Count
-
+	countryName := countries.ByName(nationalityResponse.Country[0].CountryID)
 	id, _ := uuid.NewV7()
 	profile, isInsert, err := s.profileRepository.Upsert(ctx, &repository.Profile{
 		ID:                 id,
 		Name:               name,
 		Gender:             genderResponse.Gender,
 		GenderProbability:  float64(genderResponse.Probability),
-		SampleSize:         int32(sampleSize),
 		Age:                int32(*ageResponse.Age),
 		AgeGroup:           ageGroup,
 		CountryID:          nationalityResponse.Country[0].CountryID,
+		CountryName:        countryName.Info().Name,
 		CountryProbability: float64(nationalityResponse.Country[0].Probability),
 	})
 	if err != nil {
@@ -218,17 +219,35 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*models.Profile, error
 	return s.profileRepository.MapRepositoryToHandlerModel(profile), nil
 }
 
-func (s *Service) List(ctx context.Context, filter *repository.ProfileRepositoryFilter) ([]*models.Profile, error) {
-	profiles, err := s.profileRepository.List(ctx, filter)
-	if err != nil {
+func (s *Service) List(ctx context.Context, filter *repository.ProfileRepositoryFilter, queryOptions repository.QueryOptions) (*models.ListResult[models.Profile], error) {
+	g, gCtx := errgroup.WithContext(ctx)
+
+	var total int64
+	g.Go(func() error {
+		var err error
+		total, err = s.profileRepository.Count(gCtx, filter)
+		return err
+	})
+
+	var profiles *repository.ListResult[repository.Profile]
+	g.Go(func() error {
+		var err error
+		profiles, err = s.profileRepository.List(gCtx, filter, queryOptions)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	mappedProfiles := lo.Map(profiles, func(p *repository.Profile, _ int) *models.Profile {
+	mappedProfiles := lo.Map(profiles.Items, func(p *repository.Profile, _ int) *models.Profile {
 		return s.profileRepository.MapRepositoryToHandlerModel(p)
 	})
 
-	return mappedProfiles, nil
+	return &models.ListResult[models.Profile]{
+		Total: total,
+		Data:  mappedProfiles,
+	}, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {

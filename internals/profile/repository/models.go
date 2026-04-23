@@ -5,22 +5,20 @@
 package repository
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type Profile struct {
-	ID                 uuid.UUID    `json:"id"`
-	Name               string       `json:"name"`
-	Gender             string       `json:"gender"`
-	GenderProbability  float64      `json:"gender_probability"`
-	SampleSize         int32        `json:"sample_size"`
-	Age                int32        `json:"age"`
-	AgeGroup           string       `json:"age_group"`
-	CountryID          string       `json:"country_id"`
-	CountryProbability float64      `json:"country_probability"`
-	CreatedAt          time.Time    `json:"created_at"`
-	UpdatedAt          sql.NullTime `json:"updated_at"`
+	ID                 uuid.UUID `json:"id"`
+	Name               string    `json:"name"`
+	Gender             string    `json:"gender"`
+	GenderProbability  float64   `json:"gender_probability"`
+	Age                int32     `json:"age"`
+	AgeGroup           string    `json:"age_group"`
+	CountryID          string    `json:"country_id"`
+	CountryName        string    `json:"country_name"`
+	CountryProbability float64   `json:"country_probability"`
+	CreatedAt          time.Time `json:"created_at"`
 }
