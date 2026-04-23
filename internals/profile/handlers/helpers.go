@@ -195,9 +195,22 @@ func parseQueryOptions(query url.Values) (repository.QueryOptions, error) {
 		return repository.QueryOptions{}, fmt.Errorf("limit: %w", err)
 	}
 
+	sortBy := query.Get("sort_by")
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+
+	order := query.Get("order")
+	if order == "" {
+		order = "desc"
+	}
+
+	sort := fmt.Sprintf("%s:%s", sortBy, order)
+
 	return repository.QueryOptions{
 		Page:  uint32(lo.FromPtr(page)),
 		Limit: uint32(lo.FromPtr(limit)),
+		Sort:  &sort,
 	}, nil
 }
 

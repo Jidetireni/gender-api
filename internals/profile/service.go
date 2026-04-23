@@ -29,6 +29,7 @@ type ProfileRepository interface {
 	Upsert(ctx context.Context, profile *repository.Profile) (*repository.Profile, bool, error)
 	Delete(ctx context.Context, id *uuid.UUID) error
 	MapRepositoryToHandlerModel(profile *repository.Profile) *models.Profile
+	MapRepositoryToHandlerModelShort(profile *repository.Profile) *models.ProfileShort
 }
 
 type RedisService interface {

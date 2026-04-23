@@ -194,3 +194,13 @@ func (p *ProfileRepository) MapRepositoryToHandlerModel(profile *Profile) *model
 		CreatedAt:          profile.CreatedAt,
 	}
 }
+func (p *ProfileRepository) MapRepositoryToHandlerModelShort(profile *Profile) *models.ProfileShort {
+	return &models.ProfileShort{
+		ID:        profile.ID,
+		Name:      profile.Name,
+		Gender:    profile.Gender,
+		Age:       int(profile.Age),
+		AgeGroup:  profile.AgeGroup,
+		CountryID: profile.CountryID,
+	}
+}
